@@ -1,0 +1,9 @@
+{
+  "uuid": "soft-brightness@jarod.local",
+  "name": "Soft Brightness",
+  "description": "Brillo por software con selector de pantalla (todas / HDMI / laptop). Oscurece digitalmente sin DDC/CI.",
+  "shell-version": ["50"],
+  "version": 1,
+  "url": "https://github.com/jarodsmdev/soft-brightness",
+  "settings-schema": "org.gnome.shell.extensions.soft-brightness"
+}

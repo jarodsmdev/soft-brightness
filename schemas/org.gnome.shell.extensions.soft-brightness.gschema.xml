@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="soft-brightness">
+  <schema id="org.gnome.shell.extensions.soft-brightness" path="/org/gnome/shell/extensions/soft-brightness/">
+    <key name="dim" type="i">
+      <default>30</default>
+      <range min="0" max="100"/>
+      <summary>Nivel de oscurecimiento</summary>
+      <description>Porcentaje de oscurecimiento aplicado (0-100).</description>
+    </key>
+    <key name="target" type="s">
+      <default>'all'</default>
+      <summary>Pantalla objetivo</summary>
+      <description>Conector de la pantalla a oscurecer, o "all".</description>
+    </key>
+    <key name="monitors" type="s">
+      <default>'[]'</default>
+      <summary>Monitores detectados</summary>
+      <description>Lista JSON [{id,label}] publicada por la extensión para los ajustes.</description>
+    </key>
+  </schema>
+</schemalist>
