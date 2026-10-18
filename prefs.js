@@ -67,20 +67,33 @@ export default class SoftBrightnessPreferences extends ExtensionPreferences {
             const current = settings.get_string('target');
             const options = [{id: 'all', label: _('Todas las pantallas')}];
 
-            const display = Gdk.Display.get_default();
-            const model = display?.get_monitors();
-            for (let i = 0; model && i < model.get_n_items(); i++) {
-                const m = model.get_item(i);
-                const g = m.get_geometry();
-                let conn = null;
+            const published = (() => {
                 try {
-                    conn = m.get_connector?.() || null;
+                    const list = JSON.parse(settings.get_string('monitors'));
+                    return Array.isArray(list) && list.length ? list : null;
                 } catch (e) {
+                    return null;
                 }
-                options.push({
-                    id: conn ?? `${g.x},${g.y},${g.width},${g.height}`,
-                    label: conn ?? `${g.width}x${g.height}`,
-                });
+            })();
+
+            if (published) {
+                options.push(...published);
+            } else {
+                const display = Gdk.Display.get_default();
+                const model = display?.get_monitors();
+                for (let i = 0; model && i < model.get_n_items(); i++) {
+                    const m = model.get_item(i);
+                    const g = m.get_geometry();
+                    let conn = null;
+                    try {
+                        conn = m.get_connector?.() || null;
+                    } catch (e) {
+                    }
+                    options.push({
+                        id: conn ?? `${g.x},${g.y},${g.width},${g.height}`,
+                        label: conn ?? `${g.width}x${g.height}`,
+                    });
+                }
             }
 
             for (const {id, label} of options) {
@@ -106,10 +119,12 @@ export default class SoftBrightnessPreferences extends ExtensionPreferences {
         rebuildTarget();
         const monitorsModel = Gdk.Display.get_default()?.get_monitors();
         const itemsId = monitorsModel?.connect('items-changed', rebuildTarget);
+        const monId = settings.connect('changed::monitors', rebuildTarget);
         const targetId = settings.connect('changed::target', rebuildTarget);
         window.connect('close-request', () => {
             if (itemsId)
                 monitorsModel.disconnect(itemsId);
+            settings.disconnect(monId);
             settings.disconnect(targetId);
         });
 

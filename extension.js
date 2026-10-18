@@ -106,6 +106,8 @@ export default class SoftBrightness extends Extension {
         this._dim = this._settings.get_int('dim');
         this._target = this._settings.get_string('target');
         this._overlays = new Map();
+        this._connMap = new Map();
+        this._refreshConnectorMap();
 
         this._settingsIds = [
             this._settings.connect('changed::dim', () => {
@@ -131,6 +133,7 @@ export default class SoftBrightness extends Extension {
 
         this._buildOverlays();
         this._monId = Main.layoutManager.connect('monitors-changed', () => {
+            this._refreshConnectorMap();
             this._buildOverlays();
             this._indicator._rebuildTargetMenu();
         });
@@ -151,6 +154,7 @@ export default class SoftBrightness extends Extension {
         }
         this._destroyOverlays();
         this._settings = null;
+        this._connMap = null;
         this._dim = 0;
         this._target = 'all';
     }
@@ -177,13 +181,13 @@ export default class SoftBrightness extends Extension {
 
     monitorLabels() {
         const result = [];
-        const connectors = this._connectorMap();
         for (const m of Main.layoutManager.monitors) {
             const key = `${m.x},${m.y},${m.width},${m.height}`;
-            const conn = connectors.get(key);
-            const id = conn ?? key;
-            const label = conn ?? `${m.width}x${m.height}`;
-            result.push({id, label});
+            const conn = this._connMap.get(`${m.x},${m.y}`) ?? null;
+            result.push({
+                id: conn ?? key,
+                label: conn ?? `${m.width}x${m.height}`,
+            });
         }
         if (this._settings) {
             try {
@@ -194,7 +198,7 @@ export default class SoftBrightness extends Extension {
         return result;
     }
 
-    _connectorMap() {
+    _refreshConnectorMap() {
         const map = new Map();
         try {
             const model = global.display.get_monitors();
@@ -203,11 +207,37 @@ export default class SoftBrightness extends Extension {
                 const g = m.get_geometry();
                 const conn = m.get_connector?.();
                 if (g && conn)
-                    map.set(`${g.x},${g.y},${g.width},${g.height}`, conn);
+                    map.set(`${g.x},${g.y}`, conn);
             }
         } catch (e) {
         }
-        return map;
+        this._connMap = map;
+        if (map.size >= Main.layoutManager.monitors.length)
+            return;
+        Gio.DBus.session.call(
+            'org.gnome.Mutter.DisplayConfig',
+            '/org/gnome/Mutter/DisplayConfig',
+            'org.gnome.Mutter.DisplayConfig',
+            'GetCurrentState', null, null,
+            Gio.DBusCallFlags.NONE, -1, null,
+            (conn, res) => {
+                try {
+                    const val = conn.call_finish(res).recursiveUnpack();
+                    for (const lm of val[2]) {
+                        const [x, y, , , , mons] = lm;
+                        if (mons?.length === 1 && !map.has(`${x},${y}`))
+                            map.set(`${x},${y}`, mons[0][0]);
+                    }
+                } catch (e) {
+                }
+                if (this._connMap !== map || !map.size)
+                    return;
+                this._connMap = map;
+                if (this._indicator) {
+                    this._indicator._rebuildTargetMenu();
+                    this._apply();
+                }
+            });
     }
 
     _buildOverlays() {
@@ -238,10 +268,12 @@ export default class SoftBrightness extends Extension {
 
     _apply() {
         const alpha = Math.round(MAX_ALPHA * this._dim / 100);
-        const connectors = this._connectorMap();
         for (const [key, actor] of this._overlays) {
-            const conn = connectors.get(key) ?? key;
-            const on = this._target === 'all' || this._target === conn;
+            const [x, y] = key.split(',');
+            const conn = this._connMap.get(`${x},${y}`);
+            const on = this._target === 'all' ||
+                this._target === conn ||
+                this._target === key;
             actor.opacity = on ? alpha : 0;
         }
     }
